@@ -26,12 +26,21 @@ psychiatrists = st.slider("Psychiatrists per 10,000 Population", 0.0, 5.0, 1.0)
 
 # 预测按钮
 if st.button("🔍 Predict"):
-    # 1. 心理健康数据标准化 + PCA
-    mh_array = np.array([[bipolar, anxiety, eating]])
-    mh_scaled = scaler.transform(mh_array)
-    mh_pc1 = pca.transform(mh_scaled)[0, 0]
+    # 👇 加入这一行调试用
+    st.write("👀 Raw inputs:", bipolar, anxiety, eating)
 
-    # 2. 构建最终输入特征（保持和模型训练时一致）
+    # ✅ 强制 reshape 为 (1, 3)，确保 scaler 正常接收
+    mh_array = np.array([[bipolar, anxiety, eating]])  # 注意双中括号
+    
+    # 🔁 Scaler 和 PCA
+    try:
+        mh_scaled = scaler.transform(mh_array)
+        mh_pc1 = pca.transform(mh_scaled)[0, 0]
+    except ValueError as e:
+        st.error(f"🚨 数据处理出错：{e}")
+        st.stop()
+
+    # 构建输入数据
     input_data = pd.DataFrame([{
         "AlcoholUseDisorders": alcohol,
         "Unemployment": unemployment,
@@ -40,10 +49,9 @@ if st.button("🔍 Predict"):
         "GDP_per_Worker": gdp
     }])
 
-    # 3. 模型预测
     prediction = model.predict(input_data)[0]
 
-    # 4. 风险等级判定（可按你实际标准调整）
+    # 风险等级判定
     if prediction < 5:
         risk = "🟢 Low"
     elif prediction < 15:
@@ -51,6 +59,5 @@ if st.button("🔍 Predict"):
     else:
         risk = "🔴 High"
 
-    # 5. 显示结果
-    st.success(f"✅ Predicted Suicide Mortality Rate: **{prediction:.2f}** per 100,000")
+    st.success(f"✅ Predicted Suicide Mortality Rate: **{prediction:.2f}**")
     st.info(f"📊 Risk Level: **{risk}**")
