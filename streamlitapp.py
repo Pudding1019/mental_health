@@ -71,5 +71,5 @@ if submitted:
     st.write(f"**Predicted Risk Value:** {pred_value:.2f}")
     st.write(f"**Risk Level:** 🎯 {pred_level}")
 
-    if st.checkbox("Show full data with engineered features"):
+    if st.checkbox("Predict new data"):
         st.dataframe(raw_data)
