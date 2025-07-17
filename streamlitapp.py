@@ -4,17 +4,16 @@ import numpy as np
 import joblib
 from sklearn.preprocessing import StandardScaler
 from sklearn.decomposition import PCA
-import matplotlib.pyplot as plt
 
-# 加载模型
-model_data = joblib.load("suicide_risk_model.joblib")
-
-# 页面配置
+# ========== 页面配置 ==========
 st.set_page_config(page_title="Suicide Risk Prediction", layout="centered")
 st.title("🧠 Suicide Risk Prediction")
 st.markdown("Enter original indicators below to predict suicide risk level.")
 
-# ===== 用户输入原始变量 =====
+# ========== 加载模型 ==========
+model_data = joblib.load("suicide_risk_model.joblib")
+
+# ========== 用户输入表单 ==========
 with st.form("input_form"):
     st.subheader("🔢 Input Original Variables")
 
@@ -29,8 +28,9 @@ with st.form("input_form"):
 
     submitted = st.form_submit_button("🔍 Predict")
 
+# ========== 提交后处理 ==========
 if submitted:
-    # Step 1: 构造包含原始输入的 DataFrame
+    # Step 1: 构造原始数据 DataFrame
     raw_data = pd.DataFrame({
         'AlcoholUseDisorders': [alcohol],
         'BipolarDisorders': [bipolar],
@@ -42,24 +42,23 @@ if submitted:
         'Psychiatrists(per 10 000 population)': [psychiatrists]
     })
 
-    # Step 2: 使用 PCA 得出 MentalHealth_PC1
+    # Step 2: 手动构造 MentalHealth_PC1（标准化后加权平均作为近似替代）
     mental_health_features = ['BipolarDisorders', 'AnxietyDisorders', 'EatingDisorders']
-    scaler = StandardScaler()
-    mental_health_scaled = scaler.fit_transform(raw_data[mental_health_features])
-    pca = PCA(n_components=1)
-    raw_data['MentalHealth_PC1'] = pca.fit_transform(mental_health_scaled)
+    mental_scaled = StandardScaler().fit_transform(raw_data[mental_health_features])
+    mental_pc1 = PCA(n_components=1).fit(mental_scaled).transform(mental_scaled)  # ⚠️ 注意：临时估算PCA值，调试可用
+    raw_data['MentalHealth_PC1'] = mental_pc1
 
-    # Step 3: 构造交互变量
+    # Step 3: 构造交互特征
     raw_data['EcoMental_Interaction'] = raw_data['Unemployment'] * raw_data['MentalHealth_PC1']
     raw_data['Healthcare_Interaction'] = raw_data['Psychiatrists(per 10 000 population)'] * raw_data['AlcoholUseDisorders']
 
-    # Step 4: 选取模型要求的特征并标准化
-    required_features = model_data['final_features']
-    model_input = raw_data[required_features]
-    scaled_input = model_data['scaler'].transform(model_input)
+    # Step 4: 提取模型要求特征
+    final_features = model_data['final_features']
+    model_input = raw_data[final_features]
 
-    # Step 5: 模型预测
-    pred_value = model_data['model'].predict(scaled_input)[0]
+    # Step 5: 标准化并预测
+    model_scaled = model_data['scaler'].transform(model_input)
+    pred_value = model_data['model'].predict(model_scaled)[0]
     pred_level = pd.cut(
         [pred_value],
         bins=model_data['risk_bins'],
@@ -67,13 +66,10 @@ if submitted:
         include_lowest=True
     )[0]
 
-    # Step 6: 展示预测结果
+    # Step 6: 显示结果
     st.subheader("🧾 Prediction Result")
     st.write(f"**Predicted Risk Value:** `{pred_value:.2f}`")
     st.write(f"**Risk Level:** 🎯 `{pred_level}`")
 
-    # Optional: 显示全部变量（含自动构造部分）
     if st.checkbox("Show full data with engineered features"):
         st.dataframe(raw_data)
-
-
