@@ -2,8 +2,6 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 import joblib
-from sklearn.preprocessing import StandardScaler
-from sklearn.decomposition import PCA
 
 # ========== 页面配置 ==========
 st.set_page_config(page_title="Suicide Risk Prediction", layout="centered")
@@ -42,21 +40,20 @@ if submitted:
         'Psychiatrists(per 10 000 population)': [psychiatrists]
     })
 
-    # Step 2: 手动构造 MentalHealth_PC1（标准化后加权平均作为近似替代）
+    # Step 2: 使用训练时的 scaler 和 pca 得到 MentalHealth_PC1
     mental_health_features = ['BipolarDisorders', 'AnxietyDisorders', 'EatingDisorders']
-    mental_scaled = StandardScaler().fit_transform(raw_data[mental_health_features])
-    mental_pc1 = PCA(n_components=1).fit(mental_scaled).transform(mental_scaled)  # ⚠️ 注意：临时估算PCA值，调试可用
-    raw_data['MentalHealth_PC1'] = mental_pc1
+    mental_scaled = model_data['mental_scaler'].transform(raw_data[mental_health_features])
+    raw_data['MentalHealth_PC1'] = model_data['mental_pca'].transform(mental_scaled)
 
     # Step 3: 构造交互特征
     raw_data['EcoMental_Interaction'] = raw_data['Unemployment'] * raw_data['MentalHealth_PC1']
     raw_data['Healthcare_Interaction'] = raw_data['Psychiatrists(per 10 000 population)'] * raw_data['AlcoholUseDisorders']
 
-    # Step 4: 提取模型要求特征
+    # Step 4: 提取模型要求的特征
     final_features = model_data['final_features']
     model_input = raw_data[final_features]
 
-    # Step 5: 标准化并预测
+    # Step 5: 标准化输入 + 模型预测
     model_scaled = model_data['scaler'].transform(model_input)
     pred_value = model_data['model'].predict(model_scaled)[0]
     pred_level = pd.cut(
@@ -66,10 +63,12 @@ if submitted:
         include_lowest=True
     )[0]
 
-    # Step 6: 显示结果
+    # Step 6: 展示结果
     st.subheader("🧾 Prediction Result")
     st.write(f"**Predicted Risk Value:** `{pred_value:.2f}`")
     st.write(f"**Risk Level:** 🎯 `{pred_level}`")
 
+    # 可选显示完整变量
     if st.checkbox("Show full data with engineered features"):
         st.dataframe(raw_data)
+
