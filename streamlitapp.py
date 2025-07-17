@@ -38,7 +38,6 @@ if submitted:
         'EatingDisorders': [eating],
         'Unemployment': [unemployment],
         'Adolescent_Dropout': [dropout],
-        'MentalHealth_PC1': [0],  # 占位符，后续被 PCA 替换
         'GDP_per_Worker': [gdp],
         'Psychiatrists(per 10 000 population)': [psychiatrists]
     })
