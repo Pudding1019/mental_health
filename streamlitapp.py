@@ -12,11 +12,11 @@ model_data = joblib.load("suicide_risk_model.joblib")
 # 页面配置
 st.set_page_config(page_title="Suicide Risk Prediction", layout="centered")
 st.title("🧠 Suicide Risk Prediction")
-st.markdown("Please enter the following indicators to predict the suicide risk level.")
+st.markdown("Enter original indicators below to predict suicide risk level.")
 
-# ===== 用户输入 =====
+# ===== 用户输入原始变量 =====
 with st.form("input_form"):
-    st.subheader("🔢 Input Variables")
+    st.subheader("🔢 Input Original Variables")
 
     alcohol = st.slider("Alcohol Use Disorders (%)", 0.0, 15.0, 5.0)
     bipolar = st.slider("Bipolar Disorders (%)", 0.0, 15.0, 5.0)
@@ -30,8 +30,8 @@ with st.form("input_form"):
     submitted = st.form_submit_button("🔍 Predict")
 
 if submitted:
-    # 构造 DataFrame
-    input_data = pd.DataFrame({
+    # Step 1: 构造包含原始输入的 DataFrame
+    raw_data = pd.DataFrame({
         'AlcoholUseDisorders': [alcohol],
         'BipolarDisorders': [bipolar],
         'AnxietyDisorders': [anxiety],
@@ -42,22 +42,23 @@ if submitted:
         'Psychiatrists(per 10 000 population)': [psychiatrists]
     })
 
-    # 心理健康 PCA 降维
-    mental_features = ['BipolarDisorders', 'AnxietyDisorders', 'EatingDisorders']
+    # Step 2: 使用 PCA 得出 MentalHealth_PC1
+    mental_health_features = ['BipolarDisorders', 'AnxietyDisorders', 'EatingDisorders']
     scaler = StandardScaler()
-    mental_scaled = scaler.fit_transform(input_data[mental_features])
+    mental_health_scaled = scaler.fit_transform(raw_data[mental_health_features])
     pca = PCA(n_components=1)
-    input_data['MentalHealth_PC1'] = pca.fit_transform(mental_scaled)
+    raw_data['MentalHealth_PC1'] = pca.fit_transform(mental_health_scaled)
 
-    # 构造交互特征
-    input_data['EcoMental_Interaction'] = input_data['Unemployment'] * input_data['MentalHealth_PC1']
-    input_data['Healthcare_Interaction'] = input_data['Psychiatrists(per 10 000 population)'] * input_data['AlcoholUseDisorders']
+    # Step 3: 构造交互变量
+    raw_data['EcoMental_Interaction'] = raw_data['Unemployment'] * raw_data['MentalHealth_PC1']
+    raw_data['Healthcare_Interaction'] = raw_data['Psychiatrists(per 10 000 population)'] * raw_data['AlcoholUseDisorders']
 
-    # 特征提取与缩放
-    selected_features = input_data[model_data['final_features']]
-    scaled_input = model_data['scaler'].transform(selected_features)
+    # Step 4: 选取模型要求的特征并标准化
+    required_features = model_data['final_features']
+    model_input = raw_data[required_features]
+    scaled_input = model_data['scaler'].transform(model_input)
 
-    # 模型预测
+    # Step 5: 模型预测
     pred_value = model_data['model'].predict(scaled_input)[0]
     pred_level = pd.cut(
         [pred_value],
@@ -66,13 +67,13 @@ if submitted:
         include_lowest=True
     )[0]
 
-    # 显示结果
+    # Step 6: 展示预测结果
     st.subheader("🧾 Prediction Result")
     st.write(f"**Predicted Risk Value:** `{pred_value:.2f}`")
     st.write(f"**Risk Level:** 🎯 `{pred_level}`")
 
-    # 可选显示完整数据表
-    if st.checkbox("Show input data with engineered features"):
-        st.dataframe(input_data)
+    # Optional: 显示全部变量（含自动构造部分）
+    if st.checkbox("Show full data with engineered features"):
+        st.dataframe(raw_data)
 
 
