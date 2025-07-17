@@ -1,61 +1,79 @@
-
 import streamlit as st
-import joblib
-import numpy as np
 import pandas as pd
+import numpy as np
+import joblib
+from sklearn.preprocessing import StandardScaler
+from sklearn.decomposition import PCA
+import matplotlib.pyplot as plt
 
-# 加载模型包
+# 加载模型
 model_data = joblib.load("suicide_risk_model.joblib")
-model = model_data["model"]
-scaler = model_data["scaler"]
-risk_bins = model_data["risk_bins"]
-risk_labels = model_data["risk_labels"]
-final_features = model_data["final_features"]
 
-st.title("🧠 Suicide Risk Prediction App")
-st.write("Provide the following information to estimate the suicide mortality rate and risk level.")
+# 页面配置
+st.set_page_config(page_title="Suicide Risk Prediction", layout="centered")
+st.title("🧠 Suicide Risk Prediction")
+st.markdown("Please enter the following indicators to predict the suicide risk level.")
 
-# -----------------------------
-# 用户输入界面（8个原始变量）
-# -----------------------------
-alcohol = st.slider("Alcohol Use Disorders (%)", 0.0, 15.0, 5.0)
-unemployment = st.slider("Unemployment (%)", 0.0, 25.0, 5.0)
-dropout = st.slider("Adolescent Dropout (%)", 0.0, 30.0, 10.0)
-bipolar = st.slider("Bipolar Disorder (%)", 0.0, 10.0, 1.0)
-anxiety = st.slider("Anxiety Disorders (%)", 0.0, 20.0, 5.0)
-eating = st.slider("Eating Disorders (%)", 0.0, 10.0, 1.0)
-gdp = st.number_input("GDP per Worker", min_value=10000.0, max_value=150000.0, value=40000.0)
-psy_beds = st.slider("Psychiatric hospital beds (per 100 000)", 0.0, 100.0, 10.0)
+# ===== 用户输入 =====
+with st.form("input_form"):
+    st.subheader("🔢 Input Variables")
 
-if st.button("🔍 Predict"):
-    # Step 1: Mental health PCA
-    from sklearn.preprocessing import StandardScaler
-    from sklearn.decomposition import PCA
+    alcohol = st.slider("Alcohol Use Disorders (%)", 0.0, 15.0, 5.0)
+    bipolar = st.slider("Bipolar Disorders (%)", 0.0, 15.0, 5.0)
+    anxiety = st.slider("Anxiety Disorders (%)", 0.0, 15.0, 5.0)
+    eating = st.slider("Eating Disorders (%)", 0.0, 15.0, 5.0)
+    unemployment = st.slider("Unemployment Rate (%)", 0.0, 25.0, 5.0)
+    dropout = st.slider("Adolescent Dropout Rate (%)", 0.0, 30.0, 10.0)
+    gdp = st.number_input("GDP per Worker", min_value=10000, max_value=100000, value=40000, step=1000)
+    psychiatrists = st.slider("Psychiatrists (per 10,000 population)", 0.1, 10.0, 2.0)
 
-    # 本地重新标准化并做 PCA（保持一致）
-    mh_array = np.array([[bipolar, anxiety, eating]])
-    local_scaler = StandardScaler()
-    mh_scaled = local_scaler.fit_transform(mh_array)  # 模拟训练数据一致处理
+    submitted = st.form_submit_button("🔍 Predict")
+
+if submitted:
+    # 构造 DataFrame
+    input_data = pd.DataFrame({
+        'AlcoholUseDisorders': [alcohol],
+        'BipolarDisorders': [bipolar],
+        'AnxietyDisorders': [anxiety],
+        'EatingDisorders': [eating],
+        'Unemployment': [unemployment],
+        'Adolescent_Dropout': [dropout],
+        'MentalHealth_PC1': [0],  # 占位符，后续被 PCA 替换
+        'GDP_per_Worker': [gdp],
+        'Psychiatrists(per 10 000 population)': [psychiatrists]
+    })
+
+    # 心理健康 PCA 降维
+    mental_features = ['BipolarDisorders', 'AnxietyDisorders', 'EatingDisorders']
+    scaler = StandardScaler()
+    mental_scaled = scaler.fit_transform(input_data[mental_features])
     pca = PCA(n_components=1)
-    mh_pc1 = pca.fit_transform(mh_scaled)[0, 0]  # 仅用当前输入生成PC1
+    input_data['MentalHealth_PC1'] = pca.fit_transform(mental_scaled)
 
-    # Step 2: 构建所有特征
-    data = {
-        'AlcoholUseDisorders': alcohol,
-        'Unemployment': unemployment,
-        'Adolescent_Dropout': dropout,
-        'MentalHealth_PC1': mh_pc1,
-        'GDP_per_Worker': gdp,
-        'EcoMental_Interaction': unemployment * mh_pc1,
-        'Healthcare_Interaction': psy_beds * alcohol
-    }
+    # 构造交互特征
+    input_data['EcoMental_Interaction'] = input_data['Unemployment'] * input_data['MentalHealth_PC1']
+    input_data['Healthcare_Interaction'] = input_data['Psychiatrists(per 10 000 population)'] * input_data['AlcoholUseDisorders']
 
-    input_df = pd.DataFrame([data])[final_features]
-    scaled_input = scaler.transform(input_df)
+    # 特征提取与缩放
+    selected_features = input_data[model_data['final_features']]
+    scaled_input = model_data['scaler'].transform(selected_features)
 
-    # Step 3: 预测 & 分类
-    prediction = model.predict(scaled_input)[0]
-    risk_level = pd.cut([prediction], bins=risk_bins, labels=risk_labels, include_lowest=True)[0]
+    # 模型预测
+    pred_value = model_data['model'].predict(scaled_input)[0]
+    pred_level = pd.cut(
+        [pred_value],
+        bins=model_data['risk_bins'],
+        labels=model_data['risk_labels'],
+        include_lowest=True
+    )[0]
 
-    st.success(f"📈 Predicted Suicide Mortality Rate: **{prediction:.2f}**")
-    st.info(f"🏷️ Risk Level: **{risk_level}**")
+    # 显示结果
+    st.subheader("🧾 Prediction Result")
+    st.write(f"**Predicted Risk Value:** `{pred_value:.2f}`")
+    st.write(f"**Risk Level:** 🎯 `{pred_level}`")
+
+    # 可选显示完整数据表
+    if st.checkbox("Show input data with engineered features"):
+        st.dataframe(input_data)
+
+
